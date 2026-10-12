@@ -27,7 +27,7 @@ New endpoints are added in `dataexport/endpoints.py` with `@register(...)`; they
 Optional settings (`conf/local.py`):
 
 ```python
-DATAEXPORT_RATE_LIMIT_PER_MINUTE = 120   # per key, 0 = off
+DATAEXPORT_RATE_LIMIT_PER_MINUTE = 120   # overall, per key across all endpoints, 0 = off
 DATAEXPORT_DEFAULT_PAGE_SIZE = 500
 DATAEXPORT_MAX_PAGE_SIZE = 2000
 DATAEXPORT_CLIENT_IP_HEADER = ""         # e.g. "HTTP_CF_CONNECTING_IP" behind Cloudflare
@@ -42,6 +42,15 @@ Set `DATAEXPORT_CLIENT_IP_HEADER` only if the origin is reachable solely through
 3. Revoke or regenerate from the key list actions. Regenerating invalidates the old key immediately. The list shows last-used time/IP and request count.
 
 A key can call an endpoint only if the endpoint is enabled **and** granted to that key. Grant the `dataexport.*` admin permissions only to people you trust with this data.
+
+## Throttling
+
+Two layers, both per API key, counted in one-minute windows in the Django cache:
+
+- **Per endpoint:** *Rate limit per minute* on each endpoint in the admin (default **30**, editable in the endpoints list; `0` = no endpoint limit). At 2000 rows per page that is up to 60,000 rows a minute, far more than a sync needs.
+- **Overall:** `DATAEXPORT_RATE_LIMIT_PER_MINUTE` (default **120**) across all endpoints for the key.
+
+Throttled requests get HTTP 429 with a `Retry-After` header. Endpoint responses carry `X-RateLimit-Limit` and `X-RateLimit-Remaining`. Requests that are rejected (401/403/404) don't use up an endpoint's budget. This protects against a runaway consumer; for volumetric abuse of unauthenticated traffic use Cloudflare/NPM rate limiting.
 
 ## API
 
@@ -69,7 +78,7 @@ Repeat the request with `after_id=<next_after_id>` until `next_after_id` is `nul
 | 403 | Valid key, endpoint not granted to it |
 | 404 | Unknown or disabled endpoint |
 | 400 | Bad `after_id` / `limit` / `since` |
-| 429 | Rate limit exceeded |
+| 429 | Throttled. Wait `Retry-After` seconds. |
 | 503 | A required app (e.g. `afat`) isn't installed |
 
 ## Development

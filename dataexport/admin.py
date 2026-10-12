@@ -29,17 +29,19 @@ class EndpointConfigAdmin(admin.ModelAdmin):
         "slug",
         "enabled",
         "restrict_alliance_ids",
+        "rate_limit_per_minute",
         "path",
         "key_count",
         "sample",
     )
-    list_editable = ("enabled", "restrict_alliance_ids")
+    list_editable = ("enabled", "restrict_alliance_ids", "rate_limit_per_minute")
     fields = (
         "slug",
         "title",
         "description",
         "enabled",
         "restrict_alliance_ids",
+        "rate_limit_per_minute",
     )
     readonly_fields = ("slug", "title", "description")
     change_list_template = "admin/dataexport/endpointconfig/change_list.html"

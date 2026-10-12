@@ -38,16 +38,31 @@ def _authenticate(request, ip):
     return key
 
 
-def _rate_limited(key) -> bool:
-    limit = app_settings.DATAEXPORT_RATE_LIMIT_PER_MINUTE
+def _throttle(bucket: str, limit: int):
+    """Fixed one-minute window counter in the Django cache.
+
+    Returns (allowed, remaining, retry_after_seconds). limit <= 0 means unlimited.
+    """
     if limit <= 0:
-        return False
-    bucket = f"dataexport:rl:{key.pk}:{int(timezone.now().timestamp() // 60)}"
-    cache.add(bucket, 0, timeout=70)
+        return True, None, 0
+    now = int(timezone.now().timestamp())
+    window = now // 60
+    name = f"dataexport:rl:{bucket}:{window}"
+    cache.add(name, 0, timeout=70)
     try:
-        return cache.incr(bucket) > limit
-    except ValueError:  # bucket expired between add and incr
-        return False
+        used = cache.incr(name)
+    except ValueError:  # window expired between add and incr
+        used = 1
+    retry_after = max(1, 60 - now % 60)
+    return used <= limit, max(0, limit - used), retry_after
+
+
+def _too_many(retry_after, limit):
+    response = _error("Rate limit exceeded", 429)
+    response["Retry-After"] = str(retry_after)
+    response["X-RateLimit-Limit"] = str(limit)
+    response["X-RateLimit-Remaining"] = "0"
+    return response
 
 
 def _touch(key, ip):
@@ -77,8 +92,10 @@ def _authorised(request):
     key = _authenticate(request, ip)
     if key is None:
         return None, _error("Invalid or unauthorised API key", 401)
-    if _rate_limited(key):
-        return None, _error("Rate limit exceeded", 429)
+    limit = app_settings.DATAEXPORT_RATE_LIMIT_PER_MINUTE
+    allowed, _, retry_after = _throttle(f"key:{key.pk}", limit)
+    if not allowed:
+        return None, _too_many(retry_after, limit)
     _touch(key, ip)
     return key, None
 
@@ -119,6 +136,11 @@ def endpoint(request, slug):
         return _error("Not found", 404)
     if not key.allowed_endpoints.filter(pk=config.pk).exists():
         return _error("This key is not permitted to use this endpoint", 403)
+    allowed, remaining, retry_after = _throttle(
+        f"key:{key.pk}:{slug}", config.rate_limit_per_minute
+    )
+    if not allowed:
+        return _too_many(retry_after, config.rate_limit_per_minute)
     if definition.required_app and not apps.is_installed(definition.required_app):
         return _error(f"Required app '{definition.required_app}' is not installed", 503)
 
@@ -130,7 +152,7 @@ def endpoint(request, slug):
     except ParamError as e:
         return _error(str(e), 400)
 
-    return _json(
+    response = _json(
         {
             "endpoint": slug,
             "count": len(rows),
@@ -139,4 +161,8 @@ def endpoint(request, slug):
             "results": rows,
         }
     )
+    if remaining is not None:
+        response["X-RateLimit-Limit"] = str(config.rate_limit_per_minute)
+        response["X-RateLimit-Remaining"] = str(remaining)
+    return response
 

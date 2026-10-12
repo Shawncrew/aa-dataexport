@@ -32,6 +32,14 @@ class EndpointConfig(models.Model):
             "the owning user's main). Blank = no restriction."
         ),
     )
+    rate_limit_per_minute = models.PositiveIntegerField(
+        default=30,
+        help_text=(
+            "Max requests per minute that one API key may make to this endpoint "
+            "(HTTP 429 with Retry-After beyond that). 0 = no endpoint limit; the "
+            "overall per-key limit still applies."
+        ),
+    )
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:

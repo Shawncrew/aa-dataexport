@@ -38,5 +38,7 @@ def example_response(definition) -> str:
 
 PAGING_NOTE = (
     "Responses are paged. When next_after_id is not null, repeat the request with "
-    "after_id=<next_after_id> until it is null. All sample data above is fictional."
+    "after_id=<next_after_id> until it is null. Requests are throttled per key (see the "
+    "rate limit column); on HTTP 429 wait Retry-After seconds. Every response carries "
+    "X-RateLimit-Limit / X-RateLimit-Remaining. All sample data is fictional."
 )

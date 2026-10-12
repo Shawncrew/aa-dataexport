@@ -233,12 +233,12 @@ class AdminTests(TestCase):
         cfg = EndpointConfig.objects.get(slug="demo")
         r = self.client.post(
             reverse("admin:dataexport_endpointconfig_change", args=[cfg.pk]),
-            {"enabled": "on", "restrict_alliance_ids": "abc"},
+            {"enabled": "on", "restrict_alliance_ids": "abc", "rate_limit_per_minute": "30"},
         )
         self.assertContains(r, "comma separated integers")
         self.client.post(
             reverse("admin:dataexport_endpointconfig_change", args=[cfg.pk]),
-            {"enabled": "on", "restrict_alliance_ids": "123, 456"},
+            {"enabled": "on", "restrict_alliance_ids": "123, 456", "rate_limit_per_minute": "30"},
         )
         cfg.refresh_from_db()
         self.assertTrue(cfg.enabled)
@@ -336,3 +336,95 @@ class GuideResponseDropdownTests(TestCase):
         self.assertIn("<details", guide)
         self.assertNotIn("<details open", guide)
         self.assertIn("main_character_name", guide)
+
+
+class ThrottleTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        registry.sync_endpoint_configs()
+        EndpointConfig.objects.filter(slug="demo").update(enabled=True)
+        self.url = reverse("dataexport:endpoint", args=["demo"])
+
+    def call(self, raw, url=None):
+        return self.client.get(url or self.url, HTTP_AUTHORIZATION=f"Bearer {raw}")
+
+    def test_default_endpoint_limit_is_30(self):
+        self.assertEqual(EndpointConfig.objects.get(slug="demo").rate_limit_per_minute, 30)
+
+    def test_endpoint_limit_429_with_retry_after_and_headers(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=2)
+        _, raw = make_key()
+        r1, r2, r3 = self.call(raw), self.call(raw), self.call(raw)
+        self.assertEqual([r1.status_code, r2.status_code, r3.status_code], [200, 200, 429])
+        self.assertEqual(r1["X-RateLimit-Limit"], "2")
+        self.assertEqual(r1["X-RateLimit-Remaining"], "1")
+        self.assertEqual(r2["X-RateLimit-Remaining"], "0")
+        self.assertTrue(1 <= int(r3["Retry-After"]) <= 60)
+        self.assertEqual(r3["X-RateLimit-Remaining"], "0")
+
+    def test_limit_is_per_key(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=1)
+        _, a = make_key("a")
+        _, b = make_key("b")
+        self.assertEqual(self.call(a).status_code, 200)
+        self.assertEqual(self.call(a).status_code, 429)
+        self.assertEqual(self.call(b).status_code, 200)
+
+    def test_limit_is_per_endpoint(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=1)
+        EndpointConfig.objects.filter(slug="needs-missing-app").update(enabled=True)
+        _, raw = make_key(endpoints=("demo", "needs-missing-app"))
+        other = reverse("dataexport:endpoint", args=["needs-missing-app"])
+        self.assertEqual(self.call(raw).status_code, 200)
+        self.assertEqual(self.call(raw).status_code, 429)
+        self.assertEqual(self.call(raw, other).status_code, 503)  # not throttled by demo's bucket
+
+    def test_zero_means_no_endpoint_limit(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=0)
+        _, raw = make_key()
+        codes = {self.call(raw).status_code for _ in range(35)}
+        self.assertEqual(codes, {200})
+        self.assertNotIn("X-RateLimit-Limit", self.call(raw))
+
+    def test_overall_key_limit_still_caps_endpoint(self):
+        from dataexport import app_settings
+
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=0)
+        _, raw = make_key()
+        old = app_settings.DATAEXPORT_RATE_LIMIT_PER_MINUTE
+        app_settings.DATAEXPORT_RATE_LIMIT_PER_MINUTE = 2
+        try:
+            codes = [self.call(raw).status_code for _ in range(3)]
+            retry = self.call(raw)["Retry-After"]
+        finally:
+            app_settings.DATAEXPORT_RATE_LIMIT_PER_MINUTE = old
+        self.assertEqual(codes, [200, 200, 429])
+        self.assertTrue(retry.isdigit())
+
+    def test_index_not_counted_against_endpoint_limit(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=1)
+        _, raw = make_key()
+        for _ in range(3):
+            self.assertEqual(self.call(raw, reverse("dataexport:index")).status_code, 200)
+        self.assertEqual(self.call(raw).status_code, 200)
+
+    def test_denied_requests_do_not_consume_endpoint_budget(self):
+        EndpointConfig.objects.filter(slug="demo").update(rate_limit_per_minute=1)
+        _, no_access = make_key("noaccess", endpoints=())
+        _, ok = make_key("ok")
+        for _ in range(3):
+            self.assertEqual(self.call(no_access).status_code, 403)
+        self.assertEqual(self.call(ok).status_code, 200)
+
+    def test_admin_can_edit_limit_and_guide_mentions_throttle(self):
+        admin_user = get_user_model().objects.create_superuser("root", "r@example.com", "pw")
+        self.client.force_login(admin_user)
+        cfg = EndpointConfig.objects.get(slug="demo")
+        self.client.post(
+            reverse("admin:dataexport_endpointconfig_change", args=[cfg.pk]),
+            {"enabled": "on", "restrict_alliance_ids": "", "rate_limit_per_minute": "7"},
+        )
+        cfg.refresh_from_db()
+        self.assertEqual(cfg.rate_limit_per_minute, 7)
+        html = self.client.get(reverse("admin:dataexport_endpointconfig_changelist")).content.decode()
+        self.assertIn("Retry-After", html)
