@@ -2,8 +2,9 @@ from django.contrib import admin, messages
 from django.urls import NoReverseMatch, reverse
 from django.utils.html import format_html
 
+from . import docs
 from .models import ApiKey, EndpointConfig
-from .registry import get_definition, sync_endpoint_configs
+from .registry import all_definitions, get_definition, sync_endpoint_configs
 
 
 def _show_key(request, key: ApiKey, raw: str):
@@ -11,9 +12,12 @@ def _show_key(request, key: ApiKey, raw: str):
         request,
         format_html(
             "API key for <b>{}</b> - copy it now, it cannot be shown again:<br>"
+            "<code style='user-select:all'>{}</code><br>"
+            "Test it (lists the endpoints this key may call):<br>"
             "<code style='user-select:all'>{}</code>",
             key.name,
             raw,
+            docs.curl_for(request, key=raw),
         ),
     )
 
@@ -22,8 +26,16 @@ def _show_key(request, key: ApiKey, raw: str):
 class EndpointConfigAdmin(admin.ModelAdmin):
     list_display = ("title", "slug", "enabled", "restrict_alliance_ids", "path", "key_count")
     list_editable = ("enabled", "restrict_alliance_ids")
-    fields = ("slug", "title", "description", "enabled", "restrict_alliance_ids")
+    fields = (
+        "slug",
+        "title",
+        "description",
+        "enabled",
+        "restrict_alliance_ids",
+    )
     readonly_fields = ("slug", "title", "description")
+    change_list_template = "admin/dataexport/endpointconfig/change_list.html"
+    change_form_template = "admin/dataexport/endpointconfig/change_form.html"
 
     def has_add_permission(self, request):
         return False
@@ -33,7 +45,30 @@ class EndpointConfigAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         sync_endpoint_configs()
+        extra_context = extra_context or {}
+        extra_context["guide"] = {
+            "index_curl": docs.curl_for(request),
+            "endpoints": [
+                {
+                    "title": d.title,
+                    "curl": docs.curl_for(request, d.slug, d.example_query),
+                }
+                for d in all_definitions()
+            ],
+            "paging_note": docs.PAGING_NOTE,
+        }
         return super().changelist_view(request, extra_context)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        obj = self.get_object(request, object_id)
+        d = get_definition(obj.slug) if obj else None
+        if d is not None:
+            extra_context["example"] = {
+                "curl": docs.curl_for(request, d.slug, d.example_query),
+                "response": docs.example_response(d),
+            }
+        return super().change_view(request, object_id, form_url, extra_context)
 
     @admin.display(description="Endpoint")
     def title(self, obj):

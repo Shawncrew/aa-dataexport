@@ -243,3 +243,43 @@ class AdminTests(TestCase):
         cfg.refresh_from_db()
         self.assertTrue(cfg.enabled)
         self.assertEqual(cfg.alliance_ids, [123, 456])
+
+
+class AdminDocsTests(TestCase):
+    def setUp(self):
+        registry.sync_endpoint_configs()
+        self.client.force_login(get_user_model().objects.create_superuser("root", "r@example.com", "pw"))
+
+    def test_changelist_shows_curl_guide(self):
+        r = self.client.get(reverse("admin:dataexport_endpointconfig_changelist"))
+        self.assertContains(r, "How to call the API")
+        self.assertContains(r, 'Authorization: Bearer aadx_YOUR_KEY')
+        self.assertContains(r, "/dataexport/api/v1/")
+
+    def test_builtin_endpoint_pages_show_example_response(self):
+        for slug, needle in (("characters", "Example Main"), ("afat", "Example Pilot")):
+            cfg = EndpointConfig.objects.get(slug=slug)
+            r = self.client.get(reverse("admin:dataexport_endpointconfig_change", args=[cfg.pk]))
+            self.assertContains(r, needle)
+            self.assertContains(r, f"/dataexport/api/v1/{slug}/?")
+
+    def test_new_key_banner_has_working_curl(self):
+        r = self.client.post(
+            reverse("admin:dataexport_apikey_add"),
+            {"name": "n", "is_active": "on", "allowed_ips": "", "notes": ""},
+            follow=True,
+        )
+        banner = " ".join(str(m) for m in r.context["messages"])
+        self.assertIn("curl -s -H", banner)
+        self.assertIn("Authorization: Bearer aadx_", banner)
+
+    def test_example_rows_match_handler_field_names(self):
+        # Samples must not drift from what the handlers emit: compare key sets via source.
+        import inspect
+
+        from dataexport import endpoints
+
+        for slug, fn in (("afat", endpoints.afat), ("characters", endpoints.characters)):
+            src = inspect.getsource(fn)
+            for key in registry.get_definition(slug).example_rows[0]:
+                self.assertIn(f'"{key}"', src, f"{slug}: sample field {key} not emitted by handler")

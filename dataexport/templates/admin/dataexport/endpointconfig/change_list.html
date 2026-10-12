@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+<div class="module" style="margin-bottom:20px;padding:12px 16px">
+  <h2 style="margin:0 0 8px">How to call the API</h2>
+  <p>Send the key in an <code>Authorization: Bearer &lt;key&gt;</code> header (or <code>X-API-Key</code>). Keys in the URL are not accepted. Replace <code>aadx_YOUR_KEY</code> below with a key from <em>API keys</em>.</p>
+  <p><b>List the endpoints a key may call</b></p>
+  <pre style="white-space:pre-wrap;user-select:all;background:var(--darkened-bg);padding:8px;margin:0 0 12px">{{ guide.index_curl }}</pre>
+  {% for e in guide.endpoints %}
+  <p><b>{{ e.title }}</b></p>
+  <pre style="white-space:pre-wrap;user-select:all;background:var(--darkened-bg);padding:8px;margin:0 0 12px">{{ e.curl }}</pre>
+  {% endfor %}
+  <p style="margin-bottom:0">{{ guide.paging_note }} Click an endpoint below to see a sample response.</p>
+</div>
+{{ block.super }}
+{% endblock %}

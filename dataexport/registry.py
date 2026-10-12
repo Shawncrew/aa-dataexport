@@ -15,14 +15,27 @@ class EndpointDefinition:
     # handler(request, config, after_id, limit) -> list[dict]; every row carries an "id"
     handler: Callable
     required_app: Optional[str] = None
+    # Documentation shown in the admin: fictional sample rows and an example query string.
+    example_rows: tuple = ()
+    example_query: str = ""
 
 
 _REGISTRY: dict[str, EndpointDefinition] = {}
 
 
-def register(slug, title, description, required_app=None):
+def register(
+    slug, title, description, required_app=None, example_rows=(), example_query=""
+):
     def decorator(func):
-        _REGISTRY[slug] = EndpointDefinition(slug, title, description, func, required_app)
+        _REGISTRY[slug] = EndpointDefinition(
+            slug,
+            title,
+            description,
+            func,
+            required_app,
+            tuple(example_rows),
+            example_query,
+        )
         return func
 
     return decorator

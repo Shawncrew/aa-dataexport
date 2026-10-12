@@ -32,6 +32,41 @@ def _parse_since(request):
     "corp/alliance at the time, system and ship. Params: after_id, limit, since "
     "(fleet created at or after).",
     required_app="afat",
+    example_query="limit=100&since=2026-10-01T00:00:00Z",
+    example_rows=[
+        {
+            "id": 48211,
+            "fatlink_hash": "9f3c0d1e5a7b44c2",
+            "fleet_name": "Strat op - Keepstar defence",
+            "fleet_type": "Strategic",
+            "doctrine": "Muninn",
+            "fleet_created": "2026-10-10T19:02:11+00:00",
+            "fc_character_id": 90000001,
+            "fc_character_name": "Example FC",
+            "character_id": 90000002,
+            "character_name": "Example Pilot",
+            "corporation_id": 98000001,
+            "alliance_id": 99000001,
+            "system": "1DQ1-A",
+            "ship_type": "Muninn",
+        },
+        {
+            "id": 48212,
+            "fatlink_hash": "9f3c0d1e5a7b44c2",
+            "fleet_name": "Strat op - Keepstar defence",
+            "fleet_type": "Strategic",
+            "doctrine": "Muninn",
+            "fleet_created": "2026-10-10T19:02:11+00:00",
+            "fc_character_id": 90000001,
+            "fc_character_name": "Example FC",
+            "character_id": 90000003,
+            "character_name": "Another Pilot",
+            "corporation_id": 98000001,
+            "alliance_id": 99000001,
+            "system": "1DQ1-A",
+            "ship_type": "Scimitar",
+        },
+    ],
 )
 def afat(request, config, after_id, limit):
     from afat.models import Fat
@@ -74,6 +109,33 @@ def afat(request, config, after_id, limit):
     "Main/alt associations",
     "Every claimed character with the main it belongs to. Keyed on EVE character IDs; "
     "no AA user IDs, emails or Discord IDs. Params: after_id, limit.",
+    example_query="limit=500",
+    example_rows=[
+        {
+            "id": 101,
+            "character_id": 90000010,
+            "character_name": "Example Main",
+            "corporation_id": 98000001,
+            "corporation_name": "Example Corp",
+            "alliance_id": 99000001,
+            "alliance_name": "Example Alliance",
+            "main_character_id": 90000010,
+            "main_character_name": "Example Main",
+            "is_main": True,
+        },
+        {
+            "id": 102,
+            "character_id": 90000011,
+            "character_name": "Example Alt One",
+            "corporation_id": 98000002,
+            "corporation_name": "Example Alt Corp",
+            "alliance_id": None,
+            "alliance_name": None,
+            "main_character_id": 90000010,
+            "main_character_name": "Example Main",
+            "is_main": False,
+        },
+    ],
 )
 def characters(request, config, after_id, limit):
     from allianceauth.authentication.models import CharacterOwnership
