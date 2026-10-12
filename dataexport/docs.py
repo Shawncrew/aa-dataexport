@@ -25,10 +25,10 @@ def curl_for(request, slug=None, query="", key=KEY_PLACEHOLDER) -> str:
     return f'curl -s -H "Authorization: Bearer {key}" "{url}"'
 
 
-SAMPLE_ROWS = 3  # real rows shown in the admin
+SAMPLE_ROWS = 20  # real rows shown in the admin
 SAMPLE_LIST_ITEMS = 3  # nested lists (e.g. fleet members) are cut to this many items
 MAX_VALUE_CHARS = 80  # long strings (e.g. fleet names) are trimmed in the sample
-MAX_SAMPLE_CHARS = 6000  # hard cap on the rendered sample
+MAX_SAMPLE_CHARS = 40000  # hard cap on the rendered sample (the box scrolls)
 
 
 def _body(slug, rows, limit=None):

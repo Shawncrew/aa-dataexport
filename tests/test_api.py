@@ -436,18 +436,49 @@ class LiveSampleTests(TestCase):
         self.demo = registry.get_definition("demo")
         self.cfg = EndpointConfig.objects.get(slug="demo")
 
-    def test_live_sample_is_limited_to_three_rows(self):
+    def test_live_sample_is_limited_to_sample_rows(self):
         from dataexport import docs
 
-        s = docs.sample_response(self.demo, self.cfg)
+        self.assertEqual(docs.SAMPLE_ROWS, 20)
+        s = docs.sample_response(self.demo, self.cfg)  # demo can supply any number of rows
         self.assertTrue(s["live"])
-        self.assertIn("real data", s["label"])
+        self.assertIn("real data, first 20 rows only", s["label"])
         import json
 
         body = json.loads(s["text"])
-        self.assertEqual(body["count"], 3)
-        self.assertEqual([r["id"] for r in body["results"]], [1, 2, 3])
-        self.assertEqual(body["next_after_id"], 3)  # same as the real API at limit=3
+        self.assertEqual(body["count"], 20)
+        self.assertEqual([r["id"] for r in body["results"]], list(range(1, 21)))
+        self.assertEqual(body["next_after_id"], 20)  # same as the real API at limit=20
+
+    def test_sample_with_fewer_rows_than_the_limit_shows_them_all(self):
+        from dataexport import docs
+        from dataexport.registry import EndpointDefinition
+
+        few = EndpointDefinition(
+            "few", "Few", "x",
+            lambda request, config, after_id, limit: [{"id": i} for i in range(1, 6)],
+        )
+        import json
+
+        body = json.loads(docs.sample_response(few, self.cfg)["text"])
+        self.assertEqual((body["count"], body["next_after_id"]), (5, None))
+
+    def test_twenty_realistic_rows_fit_under_the_size_cap(self):
+        from dataexport import docs
+        from dataexport.registry import EndpointDefinition
+
+        d = registry.get_definition("mains")
+        row = d.example_rows[0]  # shape of a real row, with 2 alts
+
+        def mains_like(request, config, after_id, limit):
+            return [
+                {**row, "id": i, "alts": row["alts"] + row["alts"]}  # 4 alts, cut to 3
+                for i in range(1, limit + 1)
+            ]
+
+        s = docs.sample_response(EndpointDefinition("m", "M", "x", mains_like), self.cfg)
+        self.assertNotIn("truncated", s["text"])
+        self.assertLess(len(s["text"]), docs.MAX_SAMPLE_CHARS)
 
     def test_handler_error_falls_back_to_fictional(self):
         from dataexport import docs
@@ -509,9 +540,9 @@ class LiveSampleTests(TestCase):
         self.client.force_login(get_user_model().objects.create_superuser("root", "r@example.com", "pw"))
         EndpointConfig.objects.filter(slug="demo").update(enabled=True)
         r = self.client.get(reverse("admin:dataexport_endpointconfig_changelist"))
-        self.assertContains(r, "real data, first 3 rows only")
+        self.assertContains(r, "real data, first 20 rows only")
         r = self.client.get(reverse("admin:dataexport_endpointconfig_change", args=[self.cfg.pk]))
-        self.assertContains(r, "real data, first 3 rows only")
+        self.assertContains(r, "real data, first 20 rows only")
 
 
 class FlatEndpointRemovalTests(TestCase):

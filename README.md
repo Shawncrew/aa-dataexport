@@ -47,7 +47,7 @@ A key can call an endpoint only if the endpoint is enabled **and** granted to th
 
 ## Admin samples
 
-The endpoint pages and the API guide show **real data**: the first 3 rows the endpoint would return, produced by the endpoint's own query with its alliance restriction applied, with long values trimmed and a hard size cap. If the live query errors or returns nothing, a fictional example is shown instead and the label says why (e.g. `live data unavailable (ImportError)`). Only users with admin access to the Data Export models see these.
+The endpoint pages and the API guide show **real data**: the first 20 rows the endpoint would return (nested lists such as fleet members or alts are cut to 3 items), produced by the endpoint's own query with its alliance restriction applied, with long values trimmed and a hard size cap. If the live query errors or returns nothing, a fictional example is shown instead and the label says why (e.g. `live data unavailable (ImportError)`). Only users with admin access to the Data Export models see these.
 
 ## Throttling
 
