@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aa-dataexport"
+description = "Alliance Auth plugin that exposes selected data (AFAT, main/alt associations) to other instances via scoped API keys"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Shawncrew" }]
+requires-python = ">=3.10"
+dependencies = [
+    "allianceauth>=4.6.1,<6",
+]
+keywords = ["allianceauth", "eveonline", "api", "afat"]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/Shawncrew/aa-dataexport"
+Source = "https://github.com/Shawncrew/aa-dataexport"
+
+[tool.hatch.version]
+path = "dataexport/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dataexport"]
