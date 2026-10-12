@@ -24,7 +24,15 @@ def _show_key(request, key: ApiKey, raw: str):
 
 @admin.register(EndpointConfig)
 class EndpointConfigAdmin(admin.ModelAdmin):
-    list_display = ("title", "slug", "enabled", "restrict_alliance_ids", "path", "key_count")
+    list_display = (
+        "title",
+        "slug",
+        "enabled",
+        "restrict_alliance_ids",
+        "path",
+        "key_count",
+        "sample",
+    )
     list_editable = ("enabled", "restrict_alliance_ids")
     fields = (
         "slug",
@@ -86,6 +94,18 @@ class EndpointConfigAdmin(admin.ModelAdmin):
             return reverse("dataexport:endpoint", args=[obj.slug])
         except NoReverseMatch:
             return ""
+
+    @admin.display(description="Sample data")
+    def sample(self, obj):
+        d = get_definition(obj.slug)
+        if d is None:
+            return ""
+        return format_html(
+            "<details><summary style='cursor:pointer'>Show sample response</summary>"
+            "<pre style='max-width:520px;max-height:22em;overflow:auto;margin:6px 0 0;"
+            "padding:8px;background:var(--darkened-bg);white-space:pre'>{}</pre></details>",
+            docs.example_response(d),
+        )
 
     @admin.display(description="Keys")
     def key_count(self, obj):

@@ -283,3 +283,44 @@ class AdminDocsTests(TestCase):
             src = inspect.getsource(fn)
             for key in registry.get_definition(slug).example_rows[0]:
                 self.assertIn(f'"{key}"', src, f"{slug}: sample field {key} not emitted by handler")
+
+
+class DocsBaseUrlTests(TestCase):
+    def setUp(self):
+        from django.test import RequestFactory
+
+        self.rf = RequestFactory()
+
+    def test_forwarded_proto_gives_https(self):
+        from dataexport import docs
+
+        req = self.rf.get("/", HTTP_HOST="auth.example.org", HTTP_X_FORWARDED_PROTO="https")
+        self.assertEqual(docs.base_url(req), "https://auth.example.org/dataexport/api/v1/")
+
+    def test_configured_base_url_wins(self):
+        from dataexport import app_settings, docs
+
+        old = app_settings.DATAEXPORT_PUBLIC_BASE_URL
+        app_settings.DATAEXPORT_PUBLIC_BASE_URL = "https://pub.example.org"
+        try:
+            req = self.rf.get("/", HTTP_HOST="internal")
+            self.assertEqual(docs.base_url(req), "https://pub.example.org/dataexport/api/v1/")
+        finally:
+            app_settings.DATAEXPORT_PUBLIC_BASE_URL = old
+
+    def test_plain_request_uses_its_scheme(self):
+        from dataexport import docs
+
+        req = self.rf.get("/", HTTP_HOST="auth.example.org")
+        self.assertTrue(docs.base_url(req).startswith("http://auth.example.org/"))
+
+
+class AdminLayoutTests(TestCase):
+    def test_sample_dropdown_per_row_and_guide_after_table(self):
+        registry.sync_endpoint_configs()
+        self.client.force_login(get_user_model().objects.create_superuser("root", "r@example.com", "pw"))
+        r = self.client.get(reverse("admin:dataexport_endpointconfig_changelist"))
+        html = r.content.decode()
+        self.assertGreaterEqual(html.count("Show sample response"), 2)
+        self.assertIn("Example Main", html)
+        self.assertGreater(html.index("How to call the API"), html.index("Show sample response"))

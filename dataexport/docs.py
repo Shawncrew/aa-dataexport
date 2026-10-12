@@ -3,11 +3,19 @@ import json
 
 from django.urls import reverse
 
+from . import app_settings
+
 KEY_PLACEHOLDER = "aadx_YOUR_KEY"
 
 
 def base_url(request) -> str:
-    return request.build_absolute_uri(reverse("dataexport:index"))
+    path = reverse("dataexport:index")
+    if app_settings.DATAEXPORT_PUBLIC_BASE_URL:
+        return app_settings.DATAEXPORT_PUBLIC_BASE_URL + path
+    proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    if proto in ("http", "https"):
+        return f"{proto}://{request.get_host()}{path}"
+    return request.build_absolute_uri(path)
 
 
 def curl_for(request, slug=None, query="", key=KEY_PLACEHOLDER) -> str:
