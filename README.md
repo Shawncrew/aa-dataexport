@@ -6,12 +6,12 @@ Alliance Auth plugin that exposes selected data to other instances over a small 
 
 | Slug | Data |
 |---|---|
-| `afat` | Flat FAT records, one row per pilot per fleet: fleet name/type/doctrine, FC, character, corp/alliance at the time, system, ship. Append-only, so `after_id` picks up late joiners. Requires `allianceauth-afat`. |
-| `afat-fleets` | The same data **nested by fleet**: each fleet once (id, hash, name, type, doctrine, created, FC) with a `members` list (fat id, character, corp/alliance, system, ship) and `member_count`. `limit`/`after_id` count fleets (default 50, max 200). Fleets gain members after creation, so re-pull recent fleets with `since=` and upsert by `id`. Fleets with no (matching) members are omitted. |
-| `characters` | Flat main/alt associations: one row per claimed character with its main. Keyed on EVE character IDs; never includes AA user IDs, emails, Discord IDs or tokens. |
-| `mains` | The same data **nested by main**: one entry per main (`id` = the main's character ID) with `main`, an `alts` list and `character_count`. `limit`/`after_id` count mains (default 200, max 1000), ordered by the main's character ID. There is no change timestamp, so sync by paging through everything and treat the result as a full snapshot. Accounts with no main set are omitted. With an alliance restriction, the **main's** alliance decides inclusion; alts are listed whatever their own alliance. |
+| `afat-fleets` | FAT attendance **nested by fleet** (requires `allianceauth-afat`): each fleet once (id, hash, name, type, doctrine, created, FC) with a `members` list (fat id, character, corp/alliance, system, ship) and `member_count`. `limit`/`after_id` count fleets (default 50, max 200). Fleets gain members after creation, so re-pull recent fleets with `since=` and upsert by `id`. Fleets with no (matching) members are omitted. |
+| `mains` | Main/alt associations **nested by main**, keyed on EVE character IDs (never AA user IDs, emails, Discord IDs or tokens): one entry per main (`id` = the main's character ID) with `main`, an `alts` list and `character_count`. `limit`/`after_id` count mains (default 200, max 1000), ordered by the main's character ID. There is no change timestamp, so sync by paging through everything and treat the result as a full snapshot. Accounts with no main set are omitted. With an alliance restriction, the **main's** alliance decides inclusion; alts are listed whatever their own alliance. |
 
 New endpoints are added in `dataexport/endpoints.py` with `@register(...)`; they appear in the admin automatically, **disabled** by default.
+
+*Upgrading from 0.5 or earlier:* the flat `afat` and `characters` endpoints were removed in 0.6.0 in favour of the nested ones. Migration `0003` deletes their config rows, which also removes them from every key's allowed endpoints, so grant the nested endpoints to any key that used them. Requests to the old URLs return 404.
 
 ## Install
 
@@ -39,7 +39,7 @@ Set `DATAEXPORT_CLIENT_IP_HEADER` only if the origin is reachable solely through
 
 ## Admin workflow
 
-1. **Data Export > Endpoints**: switch on the endpoints you want to offer. Optionally set *restrict alliance IDs* to limit the export to specific alliances (`afat`: alliance at the time of the FAT; `characters`: alliance of the owner's main).
+1. **Data Export > Endpoints**: switch on the endpoints you want to offer. Optionally set *restrict alliance IDs* to limit the export to specific alliances (`afat-fleets`: alliance at the time of the FAT; `mains`: alliance of the main).
 2. **Data Export > API keys > Add**: name it after the consumer, tick the endpoints it may use, optionally set an expiry and an IP/CIDR allowlist. On save the key is shown **once**; only its SHA-256 is stored.
 3. Revoke or regenerate from the key list actions. Regenerating invalidates the old key immediately. The list shows last-used time/IP and request count.
 
@@ -66,17 +66,19 @@ Authenticate with `Authorization: Bearer <key>` (or `X-API-Key: <key>`). Query-s
 
 ```bash
 curl -H "Authorization: Bearer aadx_..." https://auth.example.org/dataexport/api/v1/            # what can I call?
-curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/characters/?limit=1000"
-curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/afat/?since=2026-09-01T00:00:00Z"
+curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/mains/?limit=200"
+curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/afat-fleets/?since=2026-09-01T00:00:00Z"
 ```
 
 Responses are keyset-paginated so large syncs are cheap and stable:
 
 ```json
-{ "endpoint": "characters", "count": 500, "next_after_id": 1873, "results": [ { "id": 1873, "...": "..." } ] }
+{ "endpoint": "mains", "count": 200, "next_after_id": 90012345, "results": [ { "id": 90012345, "...": "..." } ] }
 ```
 
-Repeat the request with `after_id=<next_after_id>` until `next_after_id` is `null`. For incremental sync of AFAT, store the highest `id` you have and pass it as `after_id`.
+Repeat the request with `after_id=<next_after_id>` until `next_after_id` is `null`.
+
+Suggested sync: `mains` has no change timestamp, so page through all of it and replace your copy. `afat-fleets` is incremental: use `after_id` for the first backfill, then each run re-pull recent fleets with `since=` (a few days back) and upsert by fleet `id`, because fleets gain members after they are created.
 
 | Status | Meaning |
 |---|---|
@@ -96,4 +98,4 @@ pip install "django>=4.2"
 DJANGO_SETTINGS_MODULE=tests.settings python -m django test tests
 ```
 
-The `afat` and `characters` handlers query AFAT / Alliance Auth models and are not covered by these tests; verify them against a real instance after deploying (enable one, create a key, call it).
+The tests run the `afat-fleets` and `mains` handlers against small stand-in apps (`tests/fake_apps`) that mirror the AFAT and Alliance Auth fields and relations the export reads. They don't prove compatibility with a particular AFAT/AA version: after upgrading either, check the admin sample on the Endpoints page, which runs the real query and names the error if it fails.

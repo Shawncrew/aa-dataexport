@@ -53,15 +53,13 @@ class AfatEndpointsTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        EndpointConfig.objects.filter(slug__in=["afat", "afat-fleets"]).update(
+        EndpointConfig.objects.filter(slug="afat-fleets").update(
             enabled=True, rate_limit_per_minute=0
         )
         self.key = ApiKey(name="t")
         self.raw = self.key.regenerate()
         self.key.save()
-        self.key.allowed_endpoints.set(
-            EndpointConfig.objects.filter(slug__in=["afat", "afat-fleets"])
-        )
+        self.key.allowed_endpoints.set(EndpointConfig.objects.filter(slug="afat-fleets"))
 
     def get(self, slug, **params):
         r = self.client.get(
@@ -162,15 +160,6 @@ class AfatEndpointsTests(TestCase):
             p = EveCharacter.objects.create(character_id=5000 + i, character_name=f"P{i}")
             Fat.objects.create(character=p, fatlink=link, alliance_eve_id=10)
         self.assertEqual(queries(), base)
-
-    def test_flat_afat_endpoint_still_works(self):
-        data = self.get("afat")
-        self.assertEqual(data["count"], 5)
-        row = data["results"][0]
-        self.assertEqual(
-            (row["character_name"], row["fleet_name"], row["ship_type"]),
-            ("Pilot 0", "A", "Muninn"),
-        )
 
     def test_nested_admin_sample_is_live_and_lists_cut(self):
         Fat.objects.create(  # a 4th member on fleet A, so its list exceeds the 3-item cut

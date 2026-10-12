@@ -1,4 +1,4 @@
-"""Main/alt handlers (flat `characters` and nested `mains`) against a stand-in AA schema."""
+"""The nested `mains` handler against a stand-in AA schema."""
 import json
 
 from django.contrib.auth import get_user_model
@@ -46,12 +46,11 @@ class MainAltTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        slugs = ["mains", "characters"]
-        EndpointConfig.objects.filter(slug__in=slugs).update(enabled=True, rate_limit_per_minute=0)
+        EndpointConfig.objects.filter(slug="mains").update(enabled=True, rate_limit_per_minute=0)
         self.key = ApiKey(name="t")
         self.raw = self.key.regenerate()
         self.key.save()
-        self.key.allowed_endpoints.set(EndpointConfig.objects.filter(slug__in=slugs))
+        self.key.allowed_endpoints.set(EndpointConfig.objects.filter(slug="mains"))
 
     def get(self, slug, **params):
         r = self.client.get(
@@ -139,21 +138,3 @@ class MainAltTests(TestCase):
         self.assertEqual(body["results"][0]["id"], 50)
         self.assertLessEqual(len(body["results"][0]["alts"]), docs.SAMPLE_LIST_ITEMS)
         self.assertEqual(body["results"][0]["character_count"], 6)
-
-    # ---- flat `characters` (previously untested)
-
-    def test_flat_characters(self):
-        data = self.get("characters")
-        by_id = {r["character_id"]: r for r in data["results"]}
-        self.assertEqual(set(by_id), {100, 200, 201, 202, 300, 301, 400})
-        self.assertTrue(by_id[200]["is_main"])
-        self.assertFalse(by_id[201]["is_main"])
-        self.assertEqual(by_id[201]["main_character_id"], 200)
-        self.assertEqual(by_id[201]["main_character_name"], "Main Two")
-        self.assertIsNone(by_id[400]["main_character_id"])  # owner has no main set
-        self.assertFalse(by_id[400]["is_main"])
-
-    def test_flat_characters_alliance_restriction(self):
-        EndpointConfig.objects.filter(slug="characters").update(restrict_alliance_ids="20")
-        data = self.get("characters")
-        self.assertEqual({r["character_id"] for r in data["results"]}, {300, 301})

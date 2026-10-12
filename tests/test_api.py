@@ -257,7 +257,7 @@ class AdminDocsTests(TestCase):
         self.assertContains(r, "/dataexport/api/v1/")
 
     def test_builtin_endpoint_pages_show_example_response(self):
-        for slug, needle in (("characters", "Example Main"), ("afat", "Example Pilot")):
+        for slug, needle in (("mains", "Example Main"), ("afat-fleets", "Example Pilot")):
             cfg = EndpointConfig.objects.get(slug=slug)
             r = self.client.get(reverse("admin:dataexport_endpointconfig_change", args=[cfg.pk]))
             self.assertContains(r, needle)
@@ -279,7 +279,7 @@ class AdminDocsTests(TestCase):
 
         from dataexport import endpoints
 
-        for slug, fn in (("afat", endpoints.afat), ("characters", endpoints.characters)):
+        for slug, fn in (("afat-fleets", endpoints.afat_fleets), ("mains", endpoints.mains)):
             src = inspect.getsource(fn)
             for key in registry.get_definition(slug).example_rows[0]:
                 self.assertIn(f'"{key}"', src, f"{slug}: sample field {key} not emitted by handler")
@@ -335,7 +335,7 @@ class GuideResponseDropdownTests(TestCase):
         self.assertGreaterEqual(guide.count("Show example response"), 2)
         self.assertIn("<details", guide)
         self.assertNotIn("<details open", guide)
-        self.assertIn("main_character_name", guide)
+        self.assertIn("character_count", guide)  # the nested mains sample
 
 
 class ThrottleTests(TestCase):
@@ -456,7 +456,7 @@ class LiveSampleTests(TestCase):
             raise RuntimeError("db down")
 
         d = registry.EndpointDefinition("boom", "Boom", "x", boom, example_rows=({"id": 1},))
-        s = docs.sample_response(d, EndpointConfig.objects.get(slug="characters"))
+        s = docs.sample_response(d, EndpointConfig.objects.get(slug="mains"))
         self.assertFalse(s["live"])
         self.assertIn("RuntimeError", s["label"])
         self.assertIn("fictional", s["label"])
@@ -466,7 +466,7 @@ class LiveSampleTests(TestCase):
     def test_afat_without_data_falls_back_with_no_rows(self):
         from dataexport import docs
 
-        for slug in ("afat", "afat-fleets"):
+        for slug in ("afat-fleets", "mains"):
             d = registry.get_definition(slug)
             s = docs.sample_response(d, EndpointConfig.objects.get(slug=slug))
             self.assertFalse(s["live"])
@@ -512,3 +512,39 @@ class LiveSampleTests(TestCase):
         self.assertContains(r, "real data, first 3 rows only")
         r = self.client.get(reverse("admin:dataexport_endpointconfig_change", args=[self.cfg.pk]))
         self.assertContains(r, "real data, first 3 rows only")
+
+
+class FlatEndpointRemovalTests(TestCase):
+    def test_flat_endpoints_are_no_longer_registered(self):
+        slugs = {d.slug for d in registry.all_definitions()}
+        self.assertTrue({"afat-fleets", "mains"} <= slugs)
+        self.assertFalse({"afat", "characters"} & slugs)
+        registry.sync_endpoint_configs()
+        self.assertFalse(EndpointConfig.objects.filter(slug__in=["afat", "characters"]).exists())
+
+    def test_migration_removes_old_rows_and_key_grants_but_keeps_others(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        mig = importlib.import_module("dataexport.migrations.0003_remove_flat_endpoints")
+        registry.sync_endpoint_configs()
+        old = [EndpointConfig.objects.create(slug="afat"), EndpointConfig.objects.create(slug="characters")]
+        keep = EndpointConfig.objects.get(slug="mains")
+        key, _ = make_key("legacy", endpoints=("mains",))
+        key.allowed_endpoints.add(*old)
+        self.assertEqual(key.allowed_endpoints.count(), 3)
+
+        mig.remove_flat_endpoints(django_apps, None)
+
+        self.assertFalse(EndpointConfig.objects.filter(slug__in=["afat", "characters"]).exists())
+        self.assertEqual(list(key.allowed_endpoints.all()), [keep])
+
+    def test_old_urls_now_404_for_a_valid_key(self):
+        registry.sync_endpoint_configs()
+        _, raw = make_key("k", endpoints=("mains",))
+        for slug in ("afat", "characters"):
+            r = self.client.get(
+                reverse("dataexport:endpoint", args=[slug]), HTTP_AUTHORIZATION=f"Bearer {raw}"
+            )
+            self.assertEqual(r.status_code, 404)
