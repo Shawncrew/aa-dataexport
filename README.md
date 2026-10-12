@@ -43,6 +43,10 @@ Set `DATAEXPORT_CLIENT_IP_HEADER` only if the origin is reachable solely through
 
 A key can call an endpoint only if the endpoint is enabled **and** granted to that key. Grant the `dataexport.*` admin permissions only to people you trust with this data.
 
+## Admin samples
+
+The endpoint pages and the API guide show **real data**: the first 3 rows the endpoint would return, produced by the endpoint's own query with its alliance restriction applied, with long values trimmed and a hard size cap. If the live query errors or returns nothing, a fictional example is shown instead and the label says why (e.g. `live data unavailable (ImportError)`). Only users with admin access to the Data Export models see these.
+
 ## Throttling
 
 Two layers, both per API key, counted in one-minute windows in the Django cache:

@@ -428,3 +428,76 @@ class ThrottleTests(TestCase):
         self.assertEqual(cfg.rate_limit_per_minute, 7)
         html = self.client.get(reverse("admin:dataexport_endpointconfig_changelist")).content.decode()
         self.assertIn("Retry-After", html)
+
+
+class LiveSampleTests(TestCase):
+    def setUp(self):
+        registry.sync_endpoint_configs()
+        self.demo = registry.get_definition("demo")
+        self.cfg = EndpointConfig.objects.get(slug="demo")
+
+    def test_live_sample_is_limited_to_three_rows(self):
+        from dataexport import docs
+
+        s = docs.sample_response(self.demo, self.cfg)
+        self.assertTrue(s["live"])
+        self.assertIn("real data", s["label"])
+        import json
+
+        body = json.loads(s["text"])
+        self.assertEqual(body["count"], 3)
+        self.assertEqual([r["id"] for r in body["results"]], [1, 2, 3])
+        self.assertEqual(body["next_after_id"], 3)  # same as the real API at limit=3
+
+    def test_handler_error_falls_back_to_fictional(self):
+        from dataexport import docs
+
+        # afat/characters need apps absent in the test project -> ImportError
+        for slug in ("afat", "characters"):
+            d = registry.get_definition(slug)
+            s = docs.sample_response(d, EndpointConfig.objects.get(slug=slug))
+            self.assertFalse(s["live"])
+            self.assertIn("fictional", s["label"])
+            self.assertIn("live data unavailable", s["label"])
+            self.assertIn("results", s["text"])
+
+    def test_no_rows_falls_back(self):
+        from dataexport import docs
+
+        d = registry.get_definition("needs-missing-app")  # handler returns []
+        s = docs.sample_response(d, EndpointConfig.objects.get(slug="needs-missing-app"))
+        self.assertFalse(s["live"])
+        self.assertIn("no rows", s["label"])
+
+    def test_long_values_and_total_size_are_capped(self):
+        from dataexport import docs
+        from dataexport.registry import EndpointDefinition
+
+        big = EndpointDefinition(
+            "big", "Big", "x",
+            lambda request, config, after_id, limit: [
+                {"id": i, "name": "x" * 500, **{f"f{j}": "y" * 70 for j in range(60)}}
+                for i in range(1, limit + 1)
+            ],
+        )
+        s = docs.sample_response(big, self.cfg)
+        self.assertTrue(s["live"])
+        self.assertNotIn("x" * 100, s["text"])
+        self.assertLessEqual(len(s["text"]), docs.MAX_SAMPLE_CHARS + 30)
+        self.assertIn("truncated", s["text"])
+
+    def test_alliance_restriction_applies_to_sample(self):
+        from dataexport import docs
+        import json
+
+        self.cfg.restrict_alliance_ids = "5,6"
+        s = docs.sample_response(self.demo, self.cfg)
+        self.assertEqual(json.loads(s["text"])["results"][0]["alliances"], [5, 6])
+
+    def test_admin_pages_render_live_sample_without_error(self):
+        self.client.force_login(get_user_model().objects.create_superuser("root", "r@example.com", "pw"))
+        EndpointConfig.objects.filter(slug="demo").update(enabled=True)
+        r = self.client.get(reverse("admin:dataexport_endpointconfig_changelist"))
+        self.assertContains(r, "real data, first 3 rows only")
+        r = self.client.get(reverse("admin:dataexport_endpointconfig_change", args=[self.cfg.pk]))
+        self.assertContains(r, "real data, first 3 rows only")

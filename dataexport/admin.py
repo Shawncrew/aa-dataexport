@@ -56,15 +56,17 @@ class EndpointConfigAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         sync_endpoint_configs()
         extra_context = extra_context or {}
+        configs = {c.slug: c for c in EndpointConfig.objects.all()}
         extra_context["guide"] = {
             "index_curl": docs.curl_for(request),
             "endpoints": [
                 {
                     "title": d.title,
                     "curl": docs.curl_for(request, d.slug, d.example_query),
-                    "response": docs.example_response(d),
+                    "sample": docs.sample_response(d, configs[d.slug]),
                 }
                 for d in all_definitions()
+                if d.slug in configs
             ],
             "paging_note": docs.PAGING_NOTE,
         }
@@ -77,7 +79,7 @@ class EndpointConfigAdmin(admin.ModelAdmin):
         if d is not None:
             extra_context["example"] = {
                 "curl": docs.curl_for(request, d.slug, d.example_query),
-                "response": docs.example_response(d),
+                "sample": docs.sample_response(d, obj),
             }
         return super().change_view(request, object_id, form_url, extra_context)
 
@@ -103,11 +105,14 @@ class EndpointConfigAdmin(admin.ModelAdmin):
         d = get_definition(obj.slug)
         if d is None:
             return ""
+        sample = docs.sample_response(d, obj)
         return format_html(
             "<details><summary style='cursor:pointer'>Show sample response</summary>"
+            "<div style='font-size:11px;margin-top:4px'>{}</div>"
             "<pre style='max-width:520px;max-height:22em;overflow:auto;margin:6px 0 0;"
             "padding:8px;background:var(--darkened-bg);white-space:pre'>{}</pre></details>",
-            docs.example_response(d),
+            sample["label"],
+            sample["text"],
         )
 
     @admin.display(description="Keys")
