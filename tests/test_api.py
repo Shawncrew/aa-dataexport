@@ -452,10 +452,13 @@ class LiveSampleTests(TestCase):
     def test_handler_error_falls_back_to_fictional(self):
         from dataexport import docs
 
-        # characters needs allianceauth, which the test project doesn't have
-        d = registry.get_definition("characters")
+        def boom(request, config, after_id, limit):
+            raise RuntimeError("db down")
+
+        d = registry.EndpointDefinition("boom", "Boom", "x", boom, example_rows=({"id": 1},))
         s = docs.sample_response(d, EndpointConfig.objects.get(slug="characters"))
         self.assertFalse(s["live"])
+        self.assertIn("RuntimeError", s["label"])
         self.assertIn("fictional", s["label"])
         self.assertIn("live data unavailable", s["label"])
         self.assertIn("results", s["text"])

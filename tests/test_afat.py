@@ -9,7 +9,8 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from afat.models import EveCharacter, Fat, FatLink
+from afat.models import Fat, FatLink
+from allianceauth.eveonline.models import EveCharacter
 from dataexport import docs, registry
 from dataexport.models import ApiKey, EndpointConfig
 

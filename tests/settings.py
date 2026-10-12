@@ -16,6 +16,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.admin",
+    "allianceauth.eveonline",
+    "allianceauth.authentication",
     "afat",
     "dataexport",
 ]
