@@ -26,6 +26,7 @@ def curl_for(request, slug=None, query="", key=KEY_PLACEHOLDER) -> str:
 
 
 SAMPLE_ROWS = 3  # real rows shown in the admin
+SAMPLE_LIST_ITEMS = 3  # nested lists (e.g. fleet members) are cut to this many items
 MAX_VALUE_CHARS = 80  # long strings (e.g. fleet names) are trimmed in the sample
 MAX_SAMPLE_CHARS = 6000  # hard cap on the rendered sample
 
@@ -44,9 +45,15 @@ def example_response(definition) -> str:
     return json.dumps(_body(definition.slug, list(definition.example_rows)), indent=2)
 
 
-def _trim(value):
+def _trim(value, cut_lists):
     if isinstance(value, str) and len(value) > MAX_VALUE_CHARS:
         return value[: MAX_VALUE_CHARS - 1] + "..."
+    if isinstance(value, dict):
+        return {k: _trim(v, cut_lists) for k, v in value.items()}
+    if isinstance(value, list):
+        if len(value) > SAMPLE_LIST_ITEMS:
+            cut_lists.append(True)
+        return [_trim(v, cut_lists) for v in value[:SAMPLE_LIST_ITEMS]]
     return value
 
 
@@ -62,7 +69,8 @@ def sample_response(definition, config) -> dict:
     fallback = None
     try:
         rows = definition.handler(RequestFactory().get("/"), config, 0, SAMPLE_ROWS)
-        rows = [{k: _trim(v) for k, v in row.items()} for row in rows]
+        cut_lists = []
+        rows = [{k: _trim(v, cut_lists) for k, v in row.items()} for row in rows]
         if rows:
             text = json.dumps(_body(definition.slug, rows, SAMPLE_ROWS), indent=2)
             if len(text) > MAX_SAMPLE_CHARS:
@@ -70,7 +78,8 @@ def sample_response(definition, config) -> dict:
             return {
                 "text": text,
                 "live": True,
-                "label": f"real data, first {SAMPLE_ROWS} rows only",
+                "label": f"real data, first {SAMPLE_ROWS} rows only"
+                + (f", lists cut to {SAMPLE_LIST_ITEMS} items" if cut_lists else ""),
             }
         fallback = "no rows to show yet"
     except Exception as exc:  # noqa: BLE001 - docs must never break the admin page

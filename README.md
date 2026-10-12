@@ -6,7 +6,8 @@ Alliance Auth plugin that exposes selected data to other instances over a small 
 
 | Slug | Data |
 |---|---|
-| `afat` | FAT records: fleet name/type/doctrine, FC, character, corp/alliance at the time, system, ship. Requires `allianceauth-afat`. |
+| `afat` | Flat FAT records, one row per pilot per fleet: fleet name/type/doctrine, FC, character, corp/alliance at the time, system, ship. Append-only, so `after_id` picks up late joiners. Requires `allianceauth-afat`. |
+| `afat-fleets` | The same data **nested by fleet**: each fleet once (id, hash, name, type, doctrine, created, FC) with a `members` list (fat id, character, corp/alliance, system, ship) and `member_count`. `limit`/`after_id` count fleets (default 50, max 200). Fleets gain members after creation, so re-pull recent fleets with `since=` and upsert by `id`. Fleets with no (matching) members are omitted. |
 | `characters` | Main/alt associations: every claimed character with its main. Keyed on EVE character IDs; never includes AA user IDs, emails, Discord IDs or tokens. |
 
 New endpoints are added in `dataexport/endpoints.py` with `@register(...)`; they appear in the admin automatically, **disabled** by default.

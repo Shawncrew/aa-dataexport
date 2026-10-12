@@ -105,6 +105,117 @@ def afat(request, config, after_id, limit):
 
 
 @register(
+    "afat-fleets",
+    "AFAT fleets (nested)",
+    "One entry per fleet (FAT link) with its members nested inside: fleet name, hash, type, "
+    "doctrine, FC, and each member's character, corp/alliance, system and ship. limit and "
+    "after_id count fleets, not members. Fleets keep gaining members after they are "
+    "created, so re-pull recent fleets with since= and upsert by id. Params: after_id, "
+    "limit, since (fleet created at or after).",
+    required_app="afat",
+    default_limit=50,
+    max_limit=200,
+    example_query="limit=50&since=2026-10-01T00:00:00Z",
+    example_rows=[
+        {
+            "id": 912,
+            "hash": "9f3c0d1e5a7b44c2",
+            "fleet_name": "Strat op - Keepstar defence",
+            "fleet_type": "Strategic",
+            "doctrine": "Muninn",
+            "created": "2026-10-10T19:02:11+00:00",
+            "is_esi_link": True,
+            "fc": {"character_id": 90000001, "character_name": "Example FC"},
+            "member_count": 2,
+            "members": [
+                {
+                    "fat_id": 48211,
+                    "character_id": 90000002,
+                    "character_name": "Example Pilot",
+                    "corporation_id": 98000001,
+                    "alliance_id": 99000001,
+                    "system": "1DQ1-A",
+                    "ship_type": "Muninn",
+                },
+                {
+                    "fat_id": 48212,
+                    "character_id": 90000003,
+                    "character_name": "Another Pilot",
+                    "corporation_id": 98000001,
+                    "alliance_id": 99000001,
+                    "system": "1DQ1-A",
+                    "ship_type": "Scimitar",
+                },
+            ],
+        },
+    ],
+)
+def afat_fleets(request, config, after_id, limit):
+    from afat.models import Fat, FatLink
+    from django.db.models import Exists, OuterRef, Prefetch
+
+    # With an alliance restriction only matching members are exported, and fleets with
+    # no matching member are excluded in the query so paging by fleet id stays correct.
+    member_filter = {}
+    if config.alliance_ids:
+        member_filter["alliance_eve_id__in"] = config.alliance_ids
+
+    fleets = FatLink.objects.filter(pk__gt=after_id).filter(
+        Exists(Fat.objects.filter(fatlink=OuterRef("pk"), **member_filter))
+    )
+    since = _parse_since(request)
+    if since:
+        fleets = fleets.filter(created__gte=since)
+    fleets = (
+        fleets.select_related("character")
+        .prefetch_related(
+            Prefetch(
+                "afat_fats",
+                queryset=Fat.objects.filter(**member_filter)
+                .select_related("character")
+                .order_by("pk"),
+            )
+        )
+        .order_by("pk")[:limit]
+    )
+
+    rows = []
+    for link in fleets:
+        fc = link.character
+        members = [
+            {
+                "fat_id": fat.pk,
+                "character_id": fat.character.character_id,
+                "character_name": fat.character.character_name,
+                "corporation_id": fat.corporation_eve_id,
+                "alliance_id": fat.alliance_eve_id,
+                "system": fat.system,
+                "ship_type": fat.shiptype,
+            }
+            for fat in link.afat_fats.all()
+        ]
+        rows.append(
+            {
+                "id": link.pk,
+                "hash": link.hash,
+                "fleet_name": link.fleet,
+                "fleet_type": link.fleet_type,
+                "doctrine": link.doctrine,
+                "created": link.created.isoformat(),
+                "is_esi_link": link.is_esilink,
+                "fc": (
+                    {"character_id": fc.character_id, "character_name": fc.character_name}
+                    if fc
+                    else None
+                ),
+                "member_count": len(members),
+                "members": members,
+            }
+        )
+    return rows
+
+
+@register(
     "characters",
     "Main/alt associations",
     "Every claimed character with the main it belongs to. Keyed on EVE character IDs; "

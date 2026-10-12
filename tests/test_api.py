@@ -452,14 +452,22 @@ class LiveSampleTests(TestCase):
     def test_handler_error_falls_back_to_fictional(self):
         from dataexport import docs
 
-        # afat/characters need apps absent in the test project -> ImportError
-        for slug in ("afat", "characters"):
+        # characters needs allianceauth, which the test project doesn't have
+        d = registry.get_definition("characters")
+        s = docs.sample_response(d, EndpointConfig.objects.get(slug="characters"))
+        self.assertFalse(s["live"])
+        self.assertIn("fictional", s["label"])
+        self.assertIn("live data unavailable", s["label"])
+        self.assertIn("results", s["text"])
+
+    def test_afat_without_data_falls_back_with_no_rows(self):
+        from dataexport import docs
+
+        for slug in ("afat", "afat-fleets"):
             d = registry.get_definition(slug)
             s = docs.sample_response(d, EndpointConfig.objects.get(slug=slug))
             self.assertFalse(s["live"])
-            self.assertIn("fictional", s["label"])
-            self.assertIn("live data unavailable", s["label"])
-            self.assertIn("results", s["text"])
+            self.assertIn("no rows", s["label"])
 
     def test_no_rows_falls_back(self):
         from dataexport import docs

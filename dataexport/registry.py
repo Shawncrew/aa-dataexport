@@ -18,13 +18,23 @@ class EndpointDefinition:
     # Documentation shown in the admin: fictional sample rows and an example query string.
     example_rows: tuple = ()
     example_query: str = ""
+    # Page size for endpoints whose rows are heavy (e.g. nested); None = global settings.
+    default_limit: Optional[int] = None
+    max_limit: Optional[int] = None
 
 
 _REGISTRY: dict[str, EndpointDefinition] = {}
 
 
 def register(
-    slug, title, description, required_app=None, example_rows=(), example_query=""
+    slug,
+    title,
+    description,
+    required_app=None,
+    example_rows=(),
+    example_query="",
+    default_limit=None,
+    max_limit=None,
 ):
     def decorator(func):
         _REGISTRY[slug] = EndpointDefinition(
@@ -35,6 +45,8 @@ def register(
             required_app,
             tuple(example_rows),
             example_query,
+            default_limit,
+            max_limit,
         )
         return func
 

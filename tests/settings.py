@@ -1,3 +1,9 @@
+import os
+import sys
+
+# tests/fake_apps/afat is a minimal stand-in for allianceauth-afat
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "fake_apps"))
+
 SECRET_KEY = "test"
 DEBUG = False
 USE_TZ = True
@@ -10,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.admin",
+    "afat",
     "dataexport",
 ]
 MIDDLEWARE = [
