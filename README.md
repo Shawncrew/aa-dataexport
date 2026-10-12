@@ -17,11 +17,12 @@ New endpoints are added in `dataexport/endpoints.py` with `@register(...)`; they
    ```text
    git+https://github.com/Shawncrew/aa-dataexport.git@main
    ```
-2. Add to `INSTALLED_APPS` in `conf/local.py`:
+2. Add to `INSTALLED_APPS` in `conf/local.py`, **and** allow it to serve views without an AA login (Alliance Auth 5 requires this opt-in; without it every request is redirected to the login page). If you already have `APPS_WITH_PUBLIC_VIEWS`, add to it rather than redefining it:
    ```python
    INSTALLED_APPS += ["dataexport"]
+   APPS_WITH_PUBLIC_VIEWS = ["dataexport"]
    ```
-3. Deploy (`aa.sh deploy`). The migration creates one disabled config row per endpoint.
+3. Deploy. In the Docker setup `aa.sh deploy` rebuilds and restarts but does not recreate containers on the new image, so also run `docker compose up -d --no-deps --force-recreate -t 5` for the web and worker services, then `manage.py migrate dataexport` if the deploy did not. The migration creates one disabled config row per endpoint.
 
 Optional settings (`conf/local.py`):
 
