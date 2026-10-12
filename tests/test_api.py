@@ -324,3 +324,15 @@ class AdminLayoutTests(TestCase):
         self.assertGreaterEqual(html.count("Show sample response"), 2)
         self.assertIn("Example Main", html)
         self.assertGreater(html.index("How to call the API"), html.index("Show sample response"))
+
+
+class GuideResponseDropdownTests(TestCase):
+    def test_guide_has_collapsed_example_response_per_endpoint(self):
+        registry.sync_endpoint_configs()
+        self.client.force_login(get_user_model().objects.create_superuser("root", "r@example.com", "pw"))
+        html = self.client.get(reverse("admin:dataexport_endpointconfig_changelist")).content.decode()
+        guide = html[html.index("How to call the API"):]
+        self.assertGreaterEqual(guide.count("Show example response"), 2)
+        self.assertIn("<details", guide)
+        self.assertNotIn("<details open", guide)
+        self.assertIn("main_character_name", guide)

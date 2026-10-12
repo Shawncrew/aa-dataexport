@@ -9,8 +9,12 @@
   <pre style="white-space:pre-wrap;user-select:all;background:var(--darkened-bg);padding:8px;margin:0 0 12px">{{ guide.index_curl }}</pre>
   {% for e in guide.endpoints %}
   <p><b>{{ e.title }}</b></p>
-  <pre style="white-space:pre-wrap;user-select:all;background:var(--darkened-bg);padding:8px;margin:0 0 12px">{{ e.curl }}</pre>
+  <pre style="white-space:pre-wrap;user-select:all;background:var(--darkened-bg);padding:8px;margin:0 0 6px">{{ e.curl }}</pre>
+  <details style="margin:0 0 14px">
+    <summary style="cursor:pointer">Show example response (fictional data)</summary>
+    <pre style="max-height:30em;overflow:auto;background:var(--darkened-bg);padding:8px;margin:6px 0 0">{{ e.response }}</pre>
+  </details>
   {% endfor %}
-  <p style="margin-bottom:0">{{ guide.paging_note }} Use "Show sample response" in the table above to see example output for each endpoint.</p>
+  <p style="margin-bottom:0">{{ guide.paging_note }} Each endpoint also has a "Show sample response" dropdown in the table above.</p>
 </div>
 {% endblock %}

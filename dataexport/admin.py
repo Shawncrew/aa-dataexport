@@ -60,6 +60,7 @@ class EndpointConfigAdmin(admin.ModelAdmin):
                 {
                     "title": d.title,
                     "curl": docs.curl_for(request, d.slug, d.example_query),
+                    "response": docs.example_response(d),
                 }
                 for d in all_definitions()
             ],
