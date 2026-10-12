@@ -579,3 +579,34 @@ class FlatEndpointRemovalTests(TestCase):
                 reverse("dataexport:endpoint", args=[slug]), HTTP_AUTHORIZATION=f"Bearer {raw}"
             )
             self.assertEqual(r.status_code, 404)
+
+
+@register("bigdemo", "Big demo", "Endpoint with its own, larger page size", default_limit=3000, max_limit=5000)
+def _bigdemo(request, config, after_id, limit):
+    return [{"id": i} for i in range(after_id + 1, after_id + 1 + limit)]
+
+
+class EndpointOwnLimitTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        registry.sync_endpoint_configs()
+        EndpointConfig.objects.filter(slug="bigdemo").update(enabled=True, rate_limit_per_minute=0)
+        _, self.raw = make_key(endpoints=("bigdemo",))
+        self.url = reverse("dataexport:endpoint", args=["bigdemo"])
+
+    def get(self, **params):
+        return self.client.get(self.url, params, HTTP_AUTHORIZATION=f"Bearer {self.raw}").json()
+
+    def test_endpoint_default_and_max_override_the_global_settings(self):
+        from dataexport import app_settings
+
+        self.assertLess(app_settings.DATAEXPORT_MAX_PAGE_SIZE, 3000)  # global would cap lower
+        self.assertEqual(self.get()["count"], 3000)  # endpoint default
+        self.assertEqual(self.get(limit=5000)["count"], 5000)  # above the global max
+        self.assertEqual(self.get(limit=10**6)["count"], 5000)  # clamped to the endpoint max
+        self.assertEqual(self.get(limit=10)["count"], 10)
+
+    def test_real_endpoint_limits(self):
+        for slug, expected in (("mains", 20000), ("afat-fleets", 1000)):
+            d = registry.get_definition(slug)
+            self.assertEqual((d.default_limit, d.max_limit), (expected, expected))

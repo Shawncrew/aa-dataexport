@@ -6,8 +6,8 @@ Alliance Auth plugin that exposes selected data to other instances over a small 
 
 | Slug | Data |
 |---|---|
-| `afat-fleets` | FAT attendance **nested by fleet** (requires `allianceauth-afat`): each fleet once (id, hash, name, type, doctrine, created, FC) with a `members` list (fat id, character, corp/alliance, system, ship) and `member_count`. `limit`/`after_id` count fleets (default 50, max 200). Fleets gain members after creation, so re-pull recent fleets with `since=` and upsert by `id`. Fleets with no (matching) members are omitted. |
-| `mains` | Main/alt associations **nested by main**, keyed on EVE character IDs (never AA user IDs, emails, Discord IDs or tokens): one entry per main (`id` = the main's character ID) with `main`, an `alts` list and `character_count`. `limit`/`after_id` count mains (default 200, max 1000), ordered by the main's character ID. There is no change timestamp, so sync by paging through everything and treat the result as a full snapshot. Accounts with no main set are omitted. With an alliance restriction, the **main's** alliance decides inclusion; alts are listed whatever their own alliance. |
+| `afat-fleets` | FAT attendance **nested by fleet** (requires `allianceauth-afat`): each fleet once (id, hash, name, type, doctrine, created, FC) with a `members` list (fat id, character, corp/alliance, system, ship) and `member_count`. `limit`/`after_id` count fleets (default and max 1000, so one request returns everything today). Fleets gain members after creation, so re-pull recent fleets with `since=` and upsert by `id`. Fleets with no (matching) members are omitted. |
+| `mains` | Main/alt associations **nested by main**, keyed on EVE character IDs (never AA user IDs, emails, Discord IDs or tokens): one entry per main (`id` = the main's character ID) with `main`, an `alts` list and `character_count`. `limit`/`after_id` count mains (default and max 20000, so one request returns everything today), ordered by the main's character ID. There is no change timestamp, so sync by paging through everything and treat the result as a full snapshot. Accounts with no main set are omitted. With an alliance restriction, the **main's** alliance decides inclusion; alts are listed whatever their own alliance. |
 
 New endpoints are added in `dataexport/endpoints.py` with `@register(...)`; they appear in the admin automatically, **disabled** by default.
 
@@ -30,8 +30,8 @@ Optional settings (`conf/local.py`):
 
 ```python
 DATAEXPORT_RATE_LIMIT_PER_MINUTE = 120   # overall, per key across all endpoints, 0 = off
-DATAEXPORT_DEFAULT_PAGE_SIZE = 500
-DATAEXPORT_MAX_PAGE_SIZE = 2000
+DATAEXPORT_DEFAULT_PAGE_SIZE = 500       # fallback for endpoints that don't set their own
+DATAEXPORT_MAX_PAGE_SIZE = 2000          # fallback; an endpoint's own max_limit wins
 DATAEXPORT_CLIENT_IP_HEADER = ""         # e.g. "HTTP_CF_CONNECTING_IP" behind Cloudflare
 ```
 
@@ -66,7 +66,7 @@ Authenticate with `Authorization: Bearer <key>` (or `X-API-Key: <key>`). Query-s
 
 ```bash
 curl -H "Authorization: Bearer aadx_..." https://auth.example.org/dataexport/api/v1/            # what can I call?
-curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/mains/?limit=200"
+curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/mains/?limit=20000"
 curl -H "Authorization: Bearer aadx_..." "https://auth.example.org/dataexport/api/v1/afat-fleets/?since=2026-09-01T00:00:00Z"
 ```
 

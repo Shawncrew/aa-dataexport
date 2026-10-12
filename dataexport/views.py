@@ -147,10 +147,9 @@ def endpoint(request, slug):
     try:
         after_id = _int_param(request, "after_id", 0)
         default = definition.default_limit or app_settings.DATAEXPORT_DEFAULT_PAGE_SIZE
-        maximum = min(
-            definition.max_limit or app_settings.DATAEXPORT_MAX_PAGE_SIZE,
-            app_settings.DATAEXPORT_MAX_PAGE_SIZE,
-        )
+        # An endpoint's own max_limit wins over the global one: its rows may be much
+        # lighter or heavier than the default assumes.
+        maximum = definition.max_limit or app_settings.DATAEXPORT_MAX_PAGE_SIZE
         limit = min(_int_param(request, "limit", min(default, maximum), 1), maximum)
         rows = definition.handler(request, config, after_id, limit)
     except ParamError as e:

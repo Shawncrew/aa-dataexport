@@ -115,7 +115,7 @@ class MainAltTests(TestCase):
 
     def test_page_size_defaults_and_caps(self):
         d = registry.get_definition("mains")
-        self.assertEqual((d.default_limit, d.max_limit), (200, 1000))
+        self.assertEqual((d.default_limit, d.max_limit), (20000, 20000))
         self.assertEqual(self.get("mains", limit=10**6)["count"], 3)
 
     def test_mains_query_count_constant(self):

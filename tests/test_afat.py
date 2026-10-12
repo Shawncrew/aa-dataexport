@@ -144,7 +144,7 @@ class AfatEndpointsTests(TestCase):
 
     def test_endpoint_page_size_limits(self):
         d = registry.get_definition("afat-fleets")
-        self.assertEqual((d.default_limit, d.max_limit), (50, 200))
+        self.assertEqual((d.default_limit, d.max_limit), (1000, 1000))
         self.assertEqual(len(self.get("afat-fleets", limit=1)["results"]), 1)
         self.assertEqual(self.get("afat-fleets", limit=10**6)["count"], 3)
 

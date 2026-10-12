@@ -34,9 +34,9 @@ def _parse_since(request):
     "created, so re-pull recent fleets with since= and upsert by id. Params: after_id, "
     "limit, since (fleet created at or after).",
     required_app="afat",
-    default_limit=50,
-    max_limit=200,
-    example_query="limit=50&since=2026-10-01T00:00:00Z",
+    default_limit=1000,
+    max_limit=1000,
+    example_query="limit=1000&since=2026-10-01T00:00:00Z",
     example_rows=[
         {
             "id": 912,
@@ -154,9 +154,9 @@ def _char_summary(char):
     "character IDs (id = the main's character ID); no AA user IDs, emails or Discord IDs. "
     "There is no change timestamp, so sync by paging through everything and treating the "
     "result as a full snapshot. limit and after_id count mains. Params: after_id, limit.",
-    default_limit=200,
-    max_limit=1000,
-    example_query="limit=200",
+    default_limit=20000,
+    max_limit=20000,
+    example_query="limit=20000",
     example_rows=[
         {
             "id": 90000010,
